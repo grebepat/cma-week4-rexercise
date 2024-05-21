@@ -210,8 +210,8 @@ octopus_10 <- octopus_10 |>
     mutate(
         nMinus2 = distance_by_element(lag(geometry, 2), geometry),  # distance to pos -20 sec
         nMinus1 = distance_by_element(lag(geometry, 1), geometry),  # distance to pos -10 sec
-        nPlus1  = distance_by_element(geometry, lead(geometry, 1)), # distance to pos +10 mintues
-        nPlus2  = distance_by_element(geometry, lead(geometry, 2))  # distance to pos +20 minutes
+        nPlus1  = distance_by_element(geometry, lead(geometry, 1)), # distance to pos +10 sec
+        nPlus2  = distance_by_element(geometry, lead(geometry, 2))  # distance to pos +20 sec
     )
 
 # it is still a very dense sampling rate, which might not work for this task, we'll see if we manage to produce something usable
@@ -372,7 +372,7 @@ pedestrian_sf <- st_as_sf(pedestrian, coords = c("E", "N"), crs = 2056, remove =
 pedestrian_all <- subset(pedestrian, select = -TrajID)
 
 ggplot(pedestrian, aes(E, N, colour = TrajID))+
-  geom_point(data = pedestrian_all, aes(E,N), color="grey", alpha=0.25) +
+  geom_point(data = pedestrian_all, aes(E,N),  alpha=0.15, color="darkgrey") +
   geom_point()+
   geom_path()+
   scale_color_brewer(palette = "Spectral") +
@@ -469,14 +469,14 @@ lcss5 <- LCSS(trajectory_1, trajectory_6,pointSpacing= 2, 2, 0.5)
 # Visualize similarity in a single ggplot figure using facet_wrap, trying to recreate the plot on github
 
 similarity <- data.frame(
-  TrajID = as.factor(rep(2:6,4)),
-  Method = c(rep("DTW",5),rep("EditDist", 5), rep("Frechet",5),rep("LCSS",5)),
+  Trajectory = as.factor(rep(2:6,4)),
+  measure = c(rep("DTW",5),rep("EditDist", 5), rep("Frechet",5),rep("LCSS",5)),
   Value = c(dtw1, dtw2, dtw3, dtw4, dtw5, edit1, edit2, edit3, edit4, edit5, fre1, fre2, fre3, fre4, fre5, lcss1, lcss2, lcss3, lcss4, lcss5)
 )
 
-ggplot(similarity, aes(TrajID, Value, fill=TrajID))+
+ggplot(similarity, aes(Trajectory, Value, fill=Trajectory))+
   geom_bar(stat="identity")+
-  facet_wrap(~Method, scales="free")+
+  facet_wrap(~measure, scales="free")+
   theme_grey()+
   theme(
     legend.position="none"
