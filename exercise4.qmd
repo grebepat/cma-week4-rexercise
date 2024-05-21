@@ -274,7 +274,7 @@ octopus_10 <- octopus_10 |> # calculate rowwise time difference
 #plotting time difference between fixes
 ggplot(octopus_10, aes(time_difference))+ 
   geom_histogram(binwidth = 10)
-  geom_vline(xintercept = mean(octopus_10$time_difference, na.rm=T)) 
+
 
 ```
 
@@ -286,18 +286,70 @@ For the next exercises, I will most definetely check the time difference beforeh
 
 ## Task 3 - Visualize segmented trajectories
 
-I simply plot my fixes as I only have moving trajectories from strava. Otherwise, I woult filter via the attribute static = TRUE and colour the plot (static/movement).
+I simply plot my fixes as I only have moving trajectories from strava. Otherwise, I would filter via the attribute static = TRUE and colour the plot (static/movement).
 
 ```{r}
 
-
 octopus_10 |> 
+ # filter(!static) |>
     ggplot(aes(x, y)) + 
     geom_path() +
     geom_point() +
     coord_fixed()
 
+```
 
+## Task 3 - Visualize segmented trajectories
+
+```{r}
+
+# This function allows us to give each segment a unique ID
+rle_id <- function(vec) {
+    x <- rle(vec)$lengths
+    as.factor(rep(seq_along(x), times = x))
+}
+
+
+octopus_10 <- octopus_10 |>
+    mutate(segment_id = rle_id(static))
+
+head(octopus_10)
+
+
+#filter out every non-static point
+octopus_10 <- octopus_10 |> 
+    filter(!static)
+
+#plot with colors according to segment IDs:
+ggplot(octopus_10,aes(x, y, color = segment_id)) +
+    geom_path() +
+    geom_point() +
+    coord_fixed() +
+    theme(legend.position = "none")+
+    labs(title = "Moving Segments", subtitle="no filter set")
+
+#how many segments were separated?
+length(unique(octopus_10$segment_id))
+
+#without filtering, 66 segments were distinguished...A segmentation closer to 20 would fit a little better, as I somehow know how I would segment my own race ;) 
+
+octopus_10_2 <- octopus_10 |> 
+  group_by(segment_id) |> 
+  mutate(time_lag = as.numeric(difftime(lead(time), time))) |> 
+  filter(sum(time_lag, na.rm=T)>180) #filter out every segment with less than 5min
+
+#how many segments were separated?
+length(unique(octopus_10_2$segment_id))
+# with filtering at 3 Minutes, a total of 22 Segments were separated
+  
+ggplot(octopus_10_2, aes(x, y, color = segment_id)) +
+    geom_path() +
+    geom_point() +
+    coord_fixed() +
+    theme(legend.position = "bottom")+
+    labs(title = "Moving segments", subtitle="segments < 3minutes removed")
 
 ```
+
+
 
