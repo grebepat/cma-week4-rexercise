@@ -51,6 +51,7 @@ library("lubridate")
 ```
 
 # Input from Week 4
+
 ## Import Data
 
 ```{r}
@@ -70,7 +71,6 @@ ggplot(sabi, aes(E, N, color=DatetimeUTC))+ #plot for a first look
   coord_equal()
 
 ```
-
 
 ## Specify temporal window and measure distance
 
@@ -118,7 +118,6 @@ sabi_filter |>
 
 ```
 
-
 # Exercise 4
 
 ## Import own movement data
@@ -145,14 +144,17 @@ time <- time[-1]
 # store the extracted attributes in a data frame 
 df <- data.frame(
     name = name,
-    time = time,
+    time = as.POSIXct(time, format = "%Y-%m-%dT %H:%M:%OSZ" , tz = "UTC"),
     lat = as.numeric(coords["lat", ]),
     lon = as.numeric(coords["lon", ]),
     elevation = as.numeric(elevation)
   )
 
-```
+str(df)
 
+
+
+```
 
 ## Transform movement data into a spatial dataframe
 
@@ -174,11 +176,14 @@ ggplot(df_sf, aes(x, y))+ #plot for a first look
 df_sf |>  
   head(50)
 
+
 octopus <- df_sf
+
+str(octopus)
 
 ```
 
-It looks like the import and transformation worked correctly. It might going to be an interesting data set, as there are clusters at the end of each leg and at the center in Andermatt. There might be a few challenges regarding the serpentine, where the points are clustered due to a very slow moving rider ;). 
+It looks like the import and transformation worked correctly. It might going to be an interesting data set, as there are clusters at the end of each leg and at the center in Andermatt. There might be a few challenges regarding the serpentine, where the points are clustered due to a very slow moving rider ;).
 
 ## Task 1 - Segmentation
 
@@ -186,12 +191,9 @@ Strava works with very short tracking intervalls (1 sec.), that might not be sui
 
 ```{r}
 
-
 #selecting every 10th row from my movement data
 
 octopus_10 <- octopus[seq(from = 1, to = nrow(octopus), by = 10), ]
-
-
 
 # Implement function to calculate euclidean distance
 distance_by_element <- function(later, now) {
@@ -199,8 +201,6 @@ distance_by_element <- function(later, now) {
     st_distance(later, now, by_element = TRUE)
   )
 }
-
-
 
 # calculate the moving window for my own movement data, only every 10th fix is considered
 
@@ -213,7 +213,6 @@ octopus_10 <- octopus_10 |>
     )
 
 # it is still a very dense sampling rate, which might not work for this task, we'll see if we manage to produce something usable
-
 
 octopus_10 <- octopus_10 |> # calculate rowwise mean distance
     rowwise() |>
@@ -231,5 +230,60 @@ max(octopus_10$stepMean, na.rm = TRUE)
 
 ```
 
-
 ## Task 2 - Specify and apply threshold d
+
+It looks like the dense sampling right might be challenging for this task, but we'll have a look at it first
+
+```{r}
+
+# We first work with the same threshold as before (sabi)
+
+ggplot(octopus_10, aes(stepMean))+ 
+  geom_histogram(binwidth = 10)+
+  geom_vline(xintercept = mean(octopus_10$stepMean, na.rm=T)) 
+
+# it looks like a lot of the fixes are below the average stepmean... we might have to adapt something but lets see
+
+
+octopus_10 <- octopus_10 |> # generate a new column (true/false) if overall stepmean is bigger/smaller than rowwise stepmean
+    mutate(static = stepMean < mean(stepMean, na.rm = TRUE))
+
+octopus_10_filter <- octopus_10 |>
+    filter(!static)
+
+octopus_10_filter |>
+    ggplot(aes(x, y)) +
+    geom_path() +
+    geom_point() +
+    coord_fixed() +
+    theme(legend.position = "bottom")
+
+# The plot makes no sense right now.. I just checked my original data and it seems, that strava already removed my static points/segments as there are segments of several minutes missing...
+
+#Analyse time gaps between fixes
+
+octopus_10$later <- lead(octopus_10$time)
+octopus_10$now <- octopus_10$time
+
+octopus_10 <- octopus_10 |> # calculate rowwise time difference
+    rowwise() |>
+    mutate(
+    time_difference = as.numeric(difftime(later, now, units = "secs"))) |>
+    ungroup()
+
+#plotting time difference between fixes
+ggplot(octopus_10, aes(time_difference))+ 
+  geom_histogram(binwidth = 10)
+  geom_vline(xintercept = mean(octopus_10$time_difference, na.rm=T)) 
+
+```
+
+As we can see, most of our fixes fall into the specified 10 second gap. Unfortunately, we also have intervals as big as 9 Minutes and 34 seconds... It seems that the big gaps occur at the highest an lowest elevations where I typically took breaks during the race. **It seems that Strava already deleted the static fixes beforehand and only delivered moving fixes for this analysis...**
+
+As I only have Data from Strava to use, I will jump ahead with my current dataset (`octopus_10`). If I had other data to use, but my segmentation would fail like that, I would simply try to use other thresholds like median, percentiles or use another moving window.
+
+For the next exercises, I will most definetely check the time difference beforehand!
+
+
+
+
