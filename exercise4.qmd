@@ -1,0 +1,235 @@
+---
+title: "exercise4"
+format: html
+editor: visual
+---
+
+# Install all Packages
+
+```{r}
+
+
+install.packages("pacman")
+library("pacman")
+
+p_install("dplyr", force = FALSE)
+p_install("ggplot2", force = FALSE)
+p_install("readr", force = FALSE)
+p_install("tidyr", force = FALSE)
+p_install("sf", force = FALSE)
+p_install("terra", force = FALSE)
+p_install("tmap", force = FALSE)
+p_install("zoo", force = FALSE)
+p_install("units", force = FALSE)
+p_install("plotly", force = FALSE)
+p_install("patchwork", force = FALSE)
+p_install("tidyverse", force = FALSE)
+p_install("rjson", force = FALSE)
+p_install("jsonlite", force = FALSE)
+p_install("leaflet", force = TRUE)
+p_install("XML", force = TRUE)
+p_install("lubridate", force = TRUE)
+
+library("dplyr")
+library("ggplot2")
+library("tidyr")
+library("sf")
+library("terra")
+library("tmap")
+library("zoo")
+library("zoo")
+library("units")
+library("plotly")
+library("patchwork")
+library("tidyverse")
+library("rjson")
+library("jsonlite")
+library("leaflet")
+library("XML")
+library("lubridate")
+
+```
+
+# Input from Week 4
+## Import Data
+
+```{r}
+
+
+wildschwein <- read_delim("wildschwein_BE_2056.csv", ",")
+
+
+sabi <- wildschwein |> # we only work with sabi for a better overview
+    st_as_sf(coords = c("E", "N"), crs = 2056, remove = FALSE) |>
+    filter(TierName == "Sabi", DatetimeUTC >= "2015-07-01", DatetimeUTC < "2015-07-03")
+
+# Plot for a first overview
+ggplot(sabi, aes(E, N, color=DatetimeUTC))+ #plot for a first look
+  geom_point()+
+  geom_path()+
+  coord_equal()
+
+```
+
+
+## Specify temporal window and measure distance
+
+```{r}
+
+distance_by_element <- function(later, now) {
+  as.numeric(
+    st_distance(later, now, by_element = TRUE)
+  )
+}
+
+sabi <- sabi |> # calculate the moving window
+    mutate(
+        nMinus2 = distance_by_element(lag(geometry, 2), geometry),  # distance to pos -30 minutes
+        nMinus1 = distance_by_element(lag(geometry, 1), geometry),  # distance to pos -15 minutes
+        nPlus1  = distance_by_element(geometry, lead(geometry, 1)), # distance to pos +15 mintues
+        nPlus2  = distance_by_element(geometry, lead(geometry, 2))  # distance to pos +30 minutes
+    )
+
+
+sabi <- sabi |> # calculate rowwise mean distance
+    rowwise() |>
+    mutate(
+        stepMean = mean(c(nMinus2, nMinus1, nPlus1, nPlus2))
+    ) |>
+    ungroup()
+
+sabi
+
+
+
+sabi <- sabi |> # generate a new column (true/false) if overall stepmean is bigger/smaller than rowwise stepmean
+    mutate(static = stepMean < mean(stepMean, na.rm = TRUE))
+
+sabi_filter <- sabi |>
+    filter(!static)
+
+sabi_filter |>
+    ggplot(aes(E, N)) +
+    geom_path() +
+    geom_point() +
+    coord_fixed() +
+    theme(legend.position = "bottom")
+
+
+```
+
+
+# Exercise 4
+
+## Import own movement data
+
+I will work with movement data from a gravel race event a year back. The movement data consists of several routes that are connected at the starting point of the race. There are several shorter and longer breaks that might work good for the follwoing task.
+
+```{r}
+
+# read in the gpx-files downloaded directly from strava
+
+# we already etablished a for loop for our semester project. As I only use exemplary data here, I shortened my code a little bit:
+
+# read in race data from Octopus gravel race
+
+gpx_parsed <- htmlTreeParse(file = "activities/9369465622.gpx" , useInternalNodes = TRUE)
+
+#extract needed attributes
+coords <- xpathSApply(doc = gpx_parsed, path = "//trkpt", fun = xmlAttrs)
+elevation <- xpathSApply(doc = gpx_parsed, path = "//trkpt/ele", fun = xmlValue)
+time <- xpathSApply(doc = gpx_parsed, path = "//time", fun = xmlValue)
+name <- xpathSApply(doc = gpx_parsed, path = "//name", fun = xmlValue)
+time <- time[-1]
+ 
+# store the extracted attributes in a data frame 
+df <- data.frame(
+    name = name,
+    time = time,
+    lat = as.numeric(coords["lat", ]),
+    lon = as.numeric(coords["lon", ]),
+    elevation = as.numeric(elevation)
+  )
+
+```
+
+
+## Transform movement data into a spatial dataframe
+
+```{r}
+
+# Transform df into a spatial dataframe
+df_sf <- st_as_sf(df, coords = c("lon", "lat"), crs = 4326, remove = FALSE)
+
+# Switch to the swiss coordinate system and extraxt x and y values for the coordinates. This way we keep the lat and long (WGS 84 coordinates) and x and y coordinates for CH1903 LV95
+df_sf <- st_transform(df_sf, crs = 2056)
+df_sf$x <- st_coordinates(df_sf)[,1]
+df_sf$y <- st_coordinates(df_sf)[,2]
+
+ggplot(df_sf, aes(x, y))+ #plot for a first look
+  geom_point()+
+  geom_path()+
+  coord_equal()
+
+df_sf |>  
+  head(50)
+
+octopus <- df_sf
+
+```
+
+It looks like the import and transformation worked correctly. It might going to be an interesting data set, as there are clusters at the end of each leg and at the center in Andermatt. There might be a few challenges regarding the serpentine, where the points are clustered due to a very slow moving rider ;). 
+
+## Task 1 - Segmentation
+
+Strava works with very short tracking intervalls (1 sec.), that might not be suitable for our work. I select every 10th fix in my dataframe to get a wider temporal/moving window.
+
+```{r}
+
+
+#selecting every 10th row from my movement data
+
+octopus_10 <- octopus[seq(from = 1, to = nrow(octopus), by = 10), ]
+
+
+
+# Implement function to calculate euclidean distance
+distance_by_element <- function(later, now) {
+  as.numeric(
+    st_distance(later, now, by_element = TRUE)
+  )
+}
+
+
+
+# calculate the moving window for my own movement data, only every 10th fix is considered
+
+octopus_10 <- octopus_10 |> 
+    mutate(
+        nMinus2 = distance_by_element(lag(geometry, 2), geometry),  # distance to pos -20 sec
+        nMinus1 = distance_by_element(lag(geometry, 1), geometry),  # distance to pos -10 sec
+        nPlus1  = distance_by_element(geometry, lead(geometry, 1)), # distance to pos +10 mintues
+        nPlus2  = distance_by_element(geometry, lead(geometry, 2))  # distance to pos +20 minutes
+    )
+
+# it is still a very dense sampling rate, which might not work for this task, we'll see if we manage to produce something usable
+
+
+octopus_10 <- octopus_10 |> # calculate rowwise mean distance
+    rowwise() |>
+    mutate(
+        stepMean = mean(c(nMinus2, nMinus1, nPlus1, nPlus2))
+    ) |>
+    ungroup()
+
+octopus_10
+
+min(octopus_10$stepMean, na.rm = TRUE)
+max(octopus_10$stepMean, na.rm = TRUE)
+
+
+
+```
+
+
+## Task 2 - Specify and apply threshold d
