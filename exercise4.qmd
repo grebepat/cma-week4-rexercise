@@ -29,6 +29,7 @@ p_install("jsonlite", force = FALSE)
 p_install("leaflet", force = TRUE)
 p_install("XML", force = TRUE)
 p_install("lubridate", force = TRUE)
+p_install("SimilarityMeasures", force = TRUE)
 
 library("dplyr")
 library("ggplot2")
@@ -47,6 +48,7 @@ library("jsonlite")
 library("leaflet")
 library("XML")
 library("lubridate")
+library("SimilarityMeasures")
 
 ```
 
@@ -389,4 +391,97 @@ ggplot(pedestrian, aes(E, N, colour = TrajID))+
 
 ```
 
+## Task 6 - Calculate similarity
+
+```{r}
+
+# Building matrices for every single trajectory (1 to 6)
+
+help(package = "SimilarityMeasures")
+
+# matrices m x n, with m = number of points and n dimension of the points (E, N)
+
+trajectory_1 <- pedestrian |> 
+  filter(TrajID == 1) |> 
+  subset(select = c(E,N)) |> 
+  as.matrix()
+
+trajectory_2 <- pedestrian |> 
+  filter(TrajID == 2) |> 
+ subset(select = c(E,N)) |> 
+  as.matrix()
+
+trajectory_3 <- pedestrian |> 
+  filter(TrajID == 3) |> 
+ subset(select = c(E,N)) |> 
+  as.matrix()
+
+trajectory_4 <- pedestrian |> 
+  filter(TrajID == 4) |> 
+ subset(select = c(E,N)) |> 
+  as.matrix()
+
+trajectory_5 <- pedestrian |> 
+  filter(TrajID == 5) |> 
+ subset(select = c(E,N)) |> 
+  as.matrix()
+
+trajectory_6 <- pedestrian |> 
+  filter(TrajID == 6) |> 
+ subset(select = c(E,N)) |> 
+  as.matrix()
+
+# Trying DTW with default spacing at 1
+
+dtw1 <- DTW(trajectory_1, trajectory_2, pointSpacing = 1)
+dtw2 <- DTW(trajectory_1, trajectory_3, pointSpacing = 1)
+dtw3 <- DTW(trajectory_1, trajectory_4, pointSpacing = 1)
+dtw4 <- DTW(trajectory_1, trajectory_5, pointSpacing = 1)
+dtw5 <- DTW(trajectory_1, trajectory_6, pointSpacing = 1)
+
+# same with EditDist
+
+edit1 <- EditDist(trajectory_1, trajectory_2)
+edit2 <- EditDist(trajectory_1, trajectory_3)
+edit3 <- EditDist(trajectory_1, trajectory_4)
+edit4 <- EditDist(trajectory_1, trajectory_5)
+edit5 <- EditDist(trajectory_1, trajectory_6)
+
+# same with Frechet
+
+fre1 <- Frechet(trajectory_1, trajectory_2)
+fre2 <- Frechet(trajectory_1, trajectory_3)
+fre3 <- Frechet(trajectory_1, trajectory_4)
+fre4 <- Frechet(trajectory_1, trajectory_5)
+fre5 <- Frechet(trajectory_1, trajectory_6)
+
+# same with LCSS
+?LCSS()
+
+# Using example presented in help -> LCSS(path1, path2, 2, 2, 0.5)
+
+lcss1 <- LCSS(trajectory_1, trajectory_2,pointSpacing= 2, 2, 0.5)
+lcss2 <- LCSS(trajectory_1, trajectory_3,pointSpacing= 2, 2, 0.5)
+lcss3 <- LCSS(trajectory_1, trajectory_4,pointSpacing= 2, 2, 0.5)
+lcss4 <- LCSS(trajectory_1, trajectory_5,pointSpacing= 2, 2, 0.5)
+lcss5 <- LCSS(trajectory_1, trajectory_6,pointSpacing= 2, 2, 0.5)
+
+# Visualize similarity in a single ggplot figure using facet_wrap, trying to recreate the plot on github
+
+similarity <- data.frame(
+  TrajID = as.factor(rep(2:6,4)),
+  Method = c(rep("DTW",5),rep("EditDist", 5), rep("Frechet",5),rep("LCSS",5)),
+  Value = c(dtw1, dtw2, dtw3, dtw4, dtw5, edit1, edit2, edit3, edit4, edit5, fre1, fre2, fre3, fre4, fre5, lcss1, lcss2, lcss3, lcss4, lcss5)
+)
+
+ggplot(similarity, aes(TrajID, Value, fill=TrajID))+
+  geom_bar(stat="identity")+
+  facet_wrap(~Method, scales="free")+
+  theme_grey()+
+  theme(
+    legend.position="none"
+  )+
+  labs(title = "Computed similarities using differnt measures", subtitle= "Comparing trajectory 1 to all other trajectories", x="Comparison trajectory")
+
+```
 
