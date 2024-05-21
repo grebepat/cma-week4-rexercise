@@ -284,6 +284,20 @@ As I only have Data from Strava to use, I will jump ahead with my current datase
 
 For the next exercises, I will most definetely check the time difference beforehand!
 
+## Task 3 - Visualize segmented trajectories
+
+I simply plot my fixes as I only have moving trajectories from strava. Otherwise, I woult filter via the attribute static = TRUE and colour the plot (static/movement).
+
+```{r}
 
 
+octopus_10 |> 
+    ggplot(aes(x, y)) + 
+    geom_path() +
+    geom_point() +
+    coord_fixed()
+
+
+
+```
 
